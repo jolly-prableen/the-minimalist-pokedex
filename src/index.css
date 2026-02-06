@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --accent: #9aa4b2;
+  --accent-soft: rgba(154, 164, 178, 0.18);
+}
+
+body {
+  @apply bg-[#f6f7fb] text-slate-900 font-sans antialiased;
+}
+
+.app-shell {
+  background: radial-gradient(circle at top, #ffffff 0%, #f1f3f9 48%, #e9ecf6 100%);
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+}
+
+.orb {
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--accent-soft), transparent 70%);
+  filter: blur(2px);
+  opacity: 0.8;
+}
+
+.orb--one {
+  top: -120px;
+  right: -40px;
+}
+
+.orb--two {
+  bottom: -140px;
+  left: -80px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.7), transparent 70%);
+}
+
+.cursor-glow {
+  position: absolute;
+  width: 360px;
+  height: 360px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.85), transparent 65%);
+  mix-blend-mode: screen;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.focus-mode .focus-dim {
+  opacity: 0.6;
+  filter: saturate(0.9);
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+.focus-mode .focus-card {
+  box-shadow: 0 32px 90px rgba(15, 23, 42, 0.22);
+  transition: box-shadow 0.35s ease;
+}
