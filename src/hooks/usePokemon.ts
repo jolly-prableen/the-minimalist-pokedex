@@ -46,7 +46,9 @@ const toPokemonView = (data: PokemonResponse): PokemonView => {
   const fallback = data.sprites.front_default || "";
   const artwork = official?.front_default || fallback;
   const shinyArtwork = official?.front_shiny || fallback;
-  const types = data.types.map((slot) => slot.type.name);
+  const types = [...data.types]
+    .sort((a, b) => a.slot - b.slot)
+    .map((slot) => slot.type.name.toLowerCase());
 
   const stats = data.stats.map((stat) => ({
     label: statLabelMap[stat.stat.name] ?? formatName(stat.stat.name),
@@ -63,7 +65,7 @@ const toPokemonView = (data: PokemonResponse): PokemonView => {
     name: data.name,
     displayName: formatName(data.name),
     types,
-    primaryType: types[0],
+    primaryType: types[0] ?? "normal",
     artwork,
     shinyArtwork,
     stats: stats.map((stat, index, all) => {

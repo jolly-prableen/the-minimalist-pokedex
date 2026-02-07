@@ -19,5 +19,8 @@ export const typeThemeMap: Record<string, { accent: string; soft: string }> = {
   normal: { accent: "#a7a3a3", soft: "rgba(167, 163, 163, 0.18)" },
 };
 
-export const getThemeForType = (type?: string) =>
-  type ? typeThemeMap[type] ?? typeThemeMap.normal : typeThemeMap.normal;
+export const getThemeForType = (type?: string) => {
+  if (!type) return typeThemeMap.normal;
+  const normalized = type.toLowerCase();
+  return typeThemeMap[normalized] ?? typeThemeMap.normal;
+};

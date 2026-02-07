@@ -12,6 +12,7 @@ type StatBarProps = {
   isWeakest?: boolean;
   artwork: string;
   sequenceIndex?: number;
+  trend?: "up" | "down" | "same";
 };
 
 export const StatBar = ({
@@ -24,6 +25,7 @@ export const StatBar = ({
   isWeakest,
   artwork,
   sequenceIndex = 0,
+  trend,
 }: StatBarProps) => {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [trackWidth, setTrackWidth] = useState(0);
@@ -43,12 +45,53 @@ export const StatBar = ({
   const timing = {
     duration: 0.6 * (motionTuning?.durationMultiplier ?? 1),
     ease: motionTuning?.ease ?? "easeOut",
-    delay: sequenceIndex * 0.05,
+  };
+
+  const rowVariants = {
+    hidden: { opacity: 0, y: 8 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.32 * (motionTuning?.fadeMultiplier ?? 1),
+        ease: motionTuning?.ease ?? "easeOut",
+      },
+    },
+  };
+
+  const barVariants = {
+    hidden: { width: 0 },
+    show: (width: number) => ({
+      width,
+      transition: timing,
+    }),
+  };
+
+  const dotVariants = {
+    hidden: { x: 0, opacity: 0 },
+    show: (width: number) => ({
+      x: width,
+      opacity: [0, 0.6, 0],
+      transition: timing,
+    }),
   };
 
   return (
-    <div className="grid grid-cols-[110px_1fr_auto] items-center gap-3 text-sm">
-      <span className={isHighlight ? "text-slate-700 font-semibold" : "text-slate-500"}>
+    <motion.div
+      className="grid grid-cols-[110px_1fr_auto] items-center gap-3 text-sm"
+      variants={rowVariants}
+    >
+      <span
+        className={
+          isStrongest
+            ? "text-slate-800 font-semibold"
+            : isWeakest
+            ? "text-slate-400"
+            : isHighlight
+            ? "text-slate-700 font-semibold"
+            : "text-slate-500"
+        }
+      >
         {label}
       </span>
       <div
@@ -61,15 +104,13 @@ export const StatBar = ({
           className={`h-full rounded-full bg-[color:var(--accent)] ${
             isStrongest ? "opacity-95 shadow-[0_0_10px_rgba(255,255,255,0.45)]" : ""
           } ${isWeakest ? "opacity-45" : isHighlight ? "opacity-85" : "opacity-70"}`}
-          initial={{ width: 0 }}
-          animate={{ width: targetWidth }}
-          transition={timing}
+          variants={barVariants}
+          custom={targetWidth}
         />
         <motion.div
           className="absolute top-1/2 h-4 w-4 -translate-y-1/2 -translate-x-1/2"
-          initial={{ x: 0, opacity: 0 }}
-          animate={{ x: targetWidth, opacity: [0, 0.6, 0] }}
-          transition={timing}
+          variants={dotVariants}
+          custom={targetWidth}
         >
           <img
             src={artwork}
@@ -78,17 +119,29 @@ export const StatBar = ({
           />
         </motion.div>
       </div>
-      <motion.span
-        className={isHighlight ? "text-slate-900 font-semibold" : "text-slate-600 font-medium"}
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{
-          duration: 0.3 * (motionTuning?.fadeMultiplier ?? 1),
-          ease: motionTuning?.ease ?? "easeOut",
-        }}
+      <span
+        className={
+          isStrongest
+            ? "text-slate-900 font-semibold"
+            : isWeakest
+            ? "text-slate-400"
+            : isHighlight
+            ? "text-slate-900 font-semibold"
+            : "text-slate-600 font-medium"
+        }
       >
         {value}
-      </motion.span>
-    </div>
+        {trend === "up" ? (
+          <span className="ml-2 text-[0.65rem] font-semibold uppercase text-emerald-400">
+            ▲
+          </span>
+        ) : null}
+        {trend === "down" ? (
+          <span className="ml-2 text-[0.65rem] font-semibold uppercase text-rose-400">
+            ▼
+          </span>
+        ) : null}
+      </span>
+    </motion.div>
   );
 };

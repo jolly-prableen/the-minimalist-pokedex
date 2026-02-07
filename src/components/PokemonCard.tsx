@@ -9,16 +9,21 @@ import {
 import type { PokemonView } from "../hooks/usePokemon";
 import { TypeChips } from "./TypeChips";
 import { StatBar } from "./StatBar";
+import { useUIStore } from "../store/uiStore";
 
 type PokemonCardProps = {
   pokemon: PokemonView;
   isShiny: boolean;
   motionTuning: import("../utils/motion").MotionTuning;
   comparisonInsight?: string | null;
+  comparisonTrends?: Record<string, "up" | "down" | "same">;
   onFlipChange?: (isFlipped: boolean) => void;
   initialFlipped?: boolean;
   showFlipHint?: boolean;
   showShinyHint?: boolean;
+  spotlight?: boolean;
+  isCollected?: boolean;
+  onCollect?: (type: string) => void;
 };
 
 export const PokemonCard = ({
@@ -26,20 +31,28 @@ export const PokemonCard = ({
   isShiny,
   motionTuning,
   comparisonInsight,
+  comparisonTrends,
   onFlipChange,
   initialFlipped,
   showFlipHint,
   showShinyHint,
+  spotlight,
+  isCollected,
+  onCollect,
 }: PokemonCardProps) => (
   <InteractiveCard
     pokemon={pokemon}
     isShiny={isShiny}
     motionTuning={motionTuning}
     comparisonInsight={comparisonInsight}
+    comparisonTrends={comparisonTrends}
     onFlipChange={onFlipChange}
     initialFlipped={initialFlipped}
     showFlipHint={showFlipHint}
     showShinyHint={showShinyHint}
+    spotlight={spotlight}
+    isCollected={isCollected}
+    onCollect={onCollect}
   />
 );
 
@@ -48,11 +61,16 @@ const InteractiveCard = ({
   isShiny,
   motionTuning,
   comparisonInsight,
+  comparisonTrends,
   onFlipChange,
   initialFlipped,
   showFlipHint,
   showShinyHint,
+  spotlight,
+  isCollected,
+  onCollect,
 }: PokemonCardProps) => {
+  const { favorites, toggleFavorite } = useUIStore();
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [isFlipped, setIsFlipped] = useState(initialFlipped ?? false);
   const rotateX = useMotionValue(0);
@@ -91,6 +109,8 @@ const InteractiveCard = ({
     setIsFlipped(initialFlipped ?? false);
   }, [initialFlipped]);
 
+  const sortedStats = [...pokemon.stats].sort((a, b) => b.value - a.value);
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -109,7 +129,14 @@ const InteractiveCard = ({
       tabIndex={0}
       aria-pressed={isFlipped}
       initial={{ opacity: 0, y: 12, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      animate={{
+        opacity: 1,
+        y: 0,
+        scale: spotlight ? 1.015 : 1,
+        boxShadow: spotlight
+          ? "0 36px 95px rgba(15, 23, 42, 0.22)"
+          : "0 24px 60px rgba(15, 23, 42, 0.14)",
+      }}
       whileHover={{ y: -4 }}
       transition={{
         duration: 0.45 * motionTuning.durationMultiplier,
@@ -119,15 +146,53 @@ const InteractiveCard = ({
       style={{ rotateX: smoothX, rotateY: smoothY, transformStyle: "preserve-3d" }}
       className="focus-card relative grid gap-8 rounded-3xl border border-white/70 bg-white/90 p-8 shadow-soft transition-shadow hover:shadow-[0_30px_80px_rgba(15,23,42,0.2)] lg:grid-cols-[280px_1fr]"
     >
+      <div className="absolute right-5 top-5 z-30 flex flex-col items-end gap-2">
+        <button
+          type="button"
+          className="rounded-full border border-white/80 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 shadow-soft transition hover:text-slate-700"
+          onClick={(event) => {
+            event.stopPropagation();
+            toggleFavorite(pokemon.name);
+          }}
+          aria-pressed={Boolean(favorites[pokemon.name])}
+          aria-label={favorites[pokemon.name] ? "Remove from favorites" : "Add to favorites"}
+        >
+          {favorites[pokemon.name] ? "★ Favorite" : "☆ Favorite"}
+        </button>
+        <button
+          type="button"
+          className={`rounded-full border border-white/80 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] shadow-soft transition ${
+            isCollected
+              ? "cursor-not-allowed text-slate-300"
+              : "text-slate-400 hover:text-slate-600"
+          }`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onCollect?.(pokemon.types[0]);
+          }}
+          aria-pressed={Boolean(isCollected)}
+          aria-label={isCollected ? "Collected" : "Add to collection"}
+          disabled={Boolean(isCollected)}
+        >
+          {isCollected ? "✓ Collected" : "Collect"}
+        </button>
+      </div>
       <motion.div
-        className="pointer-events-none absolute inset-0 rounded-3xl"
+        aria-hidden="true"
+        className="card-aura pointer-events-none"
+        initial={{ opacity: 0.5, scale: 0.98 }}
+        animate={{ opacity: [0.45, 0.6, 0.45], scale: [0.98, 1.02, 0.98] }}
+        transition={{ duration: 16, ease: "easeInOut", repeat: Infinity }}
+      />
+      <motion.div
+        className="pointer-events-none absolute inset-0 rounded-3xl z-10"
         style={{
           background: glowBackground,
           WebkitMaskImage: "radial-gradient(circle, black 55%, transparent 80%)",
         } as React.CSSProperties}
       />
       <motion.div
-        className="relative col-span-full grid gap-8 lg:grid-cols-[280px_1fr]"
+        className="relative col-span-full grid gap-8 lg:grid-cols-[280px_1fr] z-20"
         animate={{ rotateY: isFlipped ? 180 : 0 }}
         transition={{
           duration: 0.6 * motionTuning.durationMultiplier,
@@ -135,11 +200,13 @@ const InteractiveCard = ({
         }}
         style={{ transformStyle: "preserve-3d" }}
       >
-        <div className="flex aspect-square items-center justify-center rounded-3xl bg-[color:var(--accent-soft)]" style={{ backfaceVisibility: "hidden" }}>
-          <img
+        <div className="flex aspect-square items-center justify-center rounded-3xl bg-[color:var(--accent-soft)] lg:self-center" style={{ backfaceVisibility: "hidden" }}>
+          <motion.img
+            layoutId={`starter-${pokemon.name}`}
             src={isShiny ? pokemon.shinyArtwork : pokemon.artwork}
             alt={pokemon.displayName}
             className="h-52 w-52 object-contain"
+            transition={{ duration: 0.55, ease: motionTuning.ease }}
           />
         </div>
         <div className="space-y-6" style={{ backfaceVisibility: "hidden" }}>
@@ -152,16 +219,31 @@ const InteractiveCard = ({
             </h2>
             <TypeChips types={pokemon.types} motionTuning={motionTuning} />
           </div>
-          <div className="space-y-3">
-            {pokemon.stats.map((stat) => (
+          <motion.div
+            className="space-y-3"
+            variants={{
+              hidden: {},
+              show: {
+                transition: {
+                  staggerChildren: 0.12,
+                  delayChildren: 0.1,
+                },
+              },
+            }}
+            initial="hidden"
+            animate="show"
+          >
+            {sortedStats.map((stat, index) => (
               <StatBar
                 key={stat.label}
                 {...stat}
+                trend={comparisonTrends?.[stat.label]}
+                sequenceIndex={index}
                 motionTuning={motionTuning}
                 artwork={isShiny ? pokemon.shinyArtwork : pokemon.artwork}
               />
             ))}
-          </div>
+          </motion.div>
           {(showFlipHint || showShinyHint) && (
             <p className="text-xs text-slate-400">
               {showFlipHint ? "Tip: Tap the card to flip." : null}
@@ -180,7 +262,7 @@ const InteractiveCard = ({
           className="absolute inset-0 grid gap-8 lg:grid-cols-[280px_1fr] rounded-3xl bg-white/90 p-0"
           style={{ transform: "rotateY(180deg)", backfaceVisibility: "hidden" }}
         >
-          <div className="flex aspect-square items-center justify-center rounded-3xl bg-[color:var(--accent-soft)]">
+          <div className="flex aspect-square items-center justify-center rounded-3xl bg-[color:var(--accent-soft)] lg:self-center lg:ml-2">
             <div className="space-y-3 text-center">
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--accent)]">
                 Detail Lab
