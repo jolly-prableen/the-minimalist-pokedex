@@ -7,7 +7,7 @@ export const fetchPokemonByName = async (name: string): Promise<PokemonResponse>
   const response = await fetch(`${BASE_URL}/pokemon/${name}`);
   if (!response.ok) {
     if (response.status === 404) {
-      throw new Error("No Pokémon found with that name.");
+      throw new Error("No Pokémon found. Try another name.");
     }
     throw new Error("Unable to reach PokéAPI. Please try again.");
   }

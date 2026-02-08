@@ -5,6 +5,7 @@ import {
   useMotionTemplate,
   useMotionValue,
   useTransform,
+  useReducedMotion,
   type MotionValue,
 } from "framer-motion";
 
@@ -53,8 +54,9 @@ type StarterOrbitProps = {
 };
 
 export const StarterOrbit = ({ activeName, onSelect }: StarterOrbitProps) => {
+  const prefersReducedMotion = useReducedMotion();
   const [hovered, setHovered] = useState<string | null>(null);
-  const isPaused = Boolean(hovered) || Boolean(activeName);
+  const isPaused = prefersReducedMotion || Boolean(hovered) || Boolean(activeName);
   const selected = activeName ?? "";
   const rotation = useMotionValue(0);
   const rotationDeg = useTransform(rotation, (value) => `${value}deg`);
@@ -80,7 +82,7 @@ export const StarterOrbit = ({ activeName, onSelect }: StarterOrbitProps) => {
         className="starter-orbit__ring"
         style={{ rotateY: rotationDeg }}
         animate={{ opacity: activeName ? 0 : 1 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
+        transition={{ duration: prefersReducedMotion ? 0.25 : 0.6, ease: "easeOut" }}
       >
         {items.map((starter) => (
           <StarterCard
@@ -101,14 +103,14 @@ export const StarterOrbit = ({ activeName, onSelect }: StarterOrbitProps) => {
           className="starter-orbit__selected"
           initial={{ opacity: 0.9, scale: 1, y: 6 }}
           animate={{ opacity: 1, scale: 1.08, y: 0 }}
-          transition={{ duration: 0.55, ease: "easeInOut" }}
+          transition={{ duration: prefersReducedMotion ? 0.25 : 0.55, ease: "easeInOut" }}
         >
           <motion.img
             layoutId={`starter-${activeName}`}
             src={starters.find((item) => item.name === activeName)?.artwork ?? ""}
             alt={starters.find((item) => item.name === activeName)?.label ?? "Selected"}
             className="starter-orbit__image"
-            transition={{ duration: 0.55, ease: "easeInOut" }}
+            transition={{ duration: prefersReducedMotion ? 0.25 : 0.55, ease: "easeInOut" }}
           />
         </motion.div>
       ) : null}

@@ -27,7 +27,7 @@ export type PokemonView = {
   shinyArtwork: string;
   stats: PokemonStatView[];
   abilities: string[];
-  moves: string[];
+  moves: Array<{ name: string; label: string }>;
   totalStats: number;
   balanceLabel: import("../utils/balance").StatBalance;
 };
@@ -81,7 +81,10 @@ const toPokemonView = (data: PokemonResponse): PokemonView => {
       };
     }),
     abilities: data.abilities.map((ability) => formatName(ability.ability.name)),
-    moves: data.moves.slice(0, 6).map((move) => formatName(move.move.name)),
+    moves: data.moves.slice(0, 6).map((move) => ({
+      name: move.move.name,
+      label: formatName(move.move.name),
+    })),
     totalStats: data.stats.reduce((sum, stat) => sum + stat.base_stat, 0),
     balanceLabel: classifyStatBalance(stats),
   };

@@ -1,5 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { LayoutGroup, motion, AnimatePresence, useAnimation } from "framer-motion";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  LayoutGroup,
+  MotionConfig,
+  motion,
+  AnimatePresence,
+  useAnimation,
+  useReducedMotion,
+} from "framer-motion";
 import { usePokemon } from "./hooks/usePokemon";
 import { useUIStore } from "./store/uiStore";
 import { getThemeForType } from "./utils/theme";
@@ -26,6 +33,10 @@ const App = () => {
   const [collectionOpen, setCollectionOpen] = useState(false);
   const [bagPulse, setBagPulse] = useState(0);
   const [isCollecting, setIsCollecting] = useState(false);
+  const [openSource, setOpenSource] = useState<
+    "search" | "starter" | "collection" | "favorites" | null
+  >(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
     isShiny,
@@ -33,6 +44,8 @@ const App = () => {
     accentSoft,
     setShiny,
     setAccent,
+    prefersReducedMotion,
+    setPrefersReducedMotion,
     cardState,
     setCardState,
     collection,
@@ -40,6 +53,7 @@ const App = () => {
     removeCollected,
     history,
     addHistory,
+    favorites,
   } = useUIStore();
   const pokemonQuery = usePokemon(query);
   const previousPokemonRef = useRef<typeof pokemonQuery.data | null>(null);
@@ -47,17 +61,23 @@ const App = () => {
   const [statTrends, setStatTrends] = useState<Record<string, "up" | "down" | "same">>({});
 
   const pokemon = pokemonQuery.data;
+  const systemReducedMotion = useReducedMotion();
+  const effectiveReducedMotion = prefersReducedMotion ?? systemReducedMotion;
   const hasQuery = Boolean(query);
   const errorMessage = pokemonQuery.isError ? (pokemonQuery.error as Error).message : null;
-  const showSkeleton = pokemonQuery.isLoading;
-  const showCard = Boolean(pokemon) && !pokemonQuery.isLoading && !pokemonQuery.isError;
+  const isLoading = pokemonQuery.isLoading || pokemonQuery.isFetching;
+  const showSkeleton = isLoading;
+  const showCard = Boolean(pokemon) && !isLoading && !pokemonQuery.isError;
   const showEmptyState = !pokemon && hasQuery && pokemonQuery.isSuccess;
   const spotlightActive = showCard;
   const baseMotionTuning = getMotionTuning(pokemon?.primaryType);
   const motionTuning = {
     ...baseMotionTuning,
     durationMultiplier:
-      baseMotionTuning.durationMultiplier * (queryConfidence === "exact" ? 0.98 : 1.05),
+      baseMotionTuning.durationMultiplier *
+      (queryConfidence === "exact" ? 0.98 : 1.05) *
+      (effectiveReducedMotion ? 0.55 : 1),
+    fadeMultiplier: baseMotionTuning.fadeMultiplier * (effectiveReducedMotion ? 0.7 : 1),
   };
   const currentCardState = pokemon ? cardState[pokemon.name] : undefined;
   const showFlipHint = showCard && !currentCardState?.isFlipped;
@@ -85,6 +105,8 @@ const App = () => {
     console.info("Collection groups", Object.keys(grouped));
     return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
   }, [collection]);
+
+  const favoriteNames = useMemo(() => Object.keys(favorites).sort(), [favorites]);
 
   useEffect(() => {
     if (!pokemon) return;
@@ -128,6 +150,12 @@ const App = () => {
   }, [pokemon, cardState, setShiny]);
 
   useEffect(() => {
+    if (prefersReducedMotion === null) {
+      setPrefersReducedMotion(Boolean(systemReducedMotion));
+    }
+  }, [prefersReducedMotion, setPrefersReducedMotion, systemReducedMotion]);
+
+  useEffect(() => {
     // Keep CSS variables synced with the UI state.
     document.documentElement.style.setProperty("--accent", accent);
     document.documentElement.style.setProperty("--accent-soft", accentSoft);
@@ -137,6 +165,7 @@ const App = () => {
     if (!query) {
       setOrbitHidden(false);
       setActiveStarter(null);
+      setOpenSource(null);
     }
   }, [query]);
   const cardFlightRef = useRef<HTMLDivElement | null>(null);
@@ -187,23 +216,64 @@ const App = () => {
     }
   }, [showCard]);
 
+  const resolveSource = (name: string, source: "search" | "starter" | "collection") =>
+    (favorites[name] ? "favorites" : source);
+
   const handleSubmit = () => {
     const raw = inputValue.trim().toLowerCase();
     const normalized = normalizeQuery(inputValue);
     if (!normalized) {
       setQuery("");
+      setOpenSource(null);
       return;
     }
     setQueryConfidence(raw === normalized ? "exact" : "corrected");
     setQuery(normalized);
+    setOpenSource(resolveSource(normalized, "search"));
   };
 
-  const handleReturnHome = () => {
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, []);
+
+  const handleReturnHome = useCallback(() => {
     setQuery("");
     setInputValue("");
     setActiveStarter(null);
     setOrbitHidden(false);
-  };
+    setOpenSource(null);
+  }, []);
+
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      if (target.isContentEditable) return true;
+      const tag = target.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      if (event.key === "/") {
+        if (isEditableTarget(event.target)) return;
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      if (event.key === "Escape") {
+        if (!query && !inputValue && !collectionOpen) return;
+        event.preventDefault();
+        setCollectionOpen(false);
+        handleReturnHome();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [collectionOpen, handleReturnHome, inputValue, query]);
 
   const focusTransition = {
     duration: 0.45 * motionTuning.durationMultiplier,
@@ -213,8 +283,9 @@ const App = () => {
   const showStarterOrbit = (!hasQuery || Boolean(activeStarter)) && !orbitHidden;
 
   return (
-    <LayoutGroup>
-      <motion.div
+    <MotionConfig reducedMotion={effectiveReducedMotion ? "always" : "never"}>
+      <LayoutGroup>
+        <motion.div
         className={`app-shell relative min-h-screen overflow-hidden ${
           spotlightActive ? "focus-mode" : ""
         }`}
@@ -264,9 +335,9 @@ const App = () => {
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.25, ease: "easeOut" }}
                     className="rounded-full border border-white/80 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 shadow-soft transition hover:text-slate-700"
-                    aria-label="Return to home"
+                    aria-label="Back to home"
                   >
-                    ← Home
+                    ← Back to Home
                   </motion.button>
                 )}
               </AnimatePresence>
@@ -324,7 +395,7 @@ const App = () => {
                   </span>
                 </div>
                 {Object.keys(collection).length === 0 ? (
-                  <p className="mt-4 text-sm text-slate-500">No Pokémon collected yet.</p>
+                  <p className="mt-4 text-sm text-slate-500">Your collection will appear here.</p>
                 ) : (
                   <div className="mt-6 space-y-4">
                     {groupedCollection.map(([type, names]) => (
@@ -345,6 +416,7 @@ const App = () => {
                                   setInputValue(name);
                                   setQueryConfidence("exact");
                                   setQuery(name);
+                                  setOpenSource(resolveSource(name, "collection"));
                                 }}
                                 className="flex-1 text-left transition hover:text-slate-700"
                               >
@@ -365,6 +437,25 @@ const App = () => {
                     ))}
                   </div>
                 )}
+                <div className="mt-6 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
+                    Favorites
+                  </p>
+                  {favoriteNames.length === 0 ? (
+                    <p className="text-sm text-slate-500">Your favorites will appear here.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {favoriteNames.map((name) => (
+                        <span
+                          key={name}
+                          className="rounded-full border border-white/70 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-slate-400 shadow-soft"
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -385,6 +476,7 @@ const App = () => {
                     setInputValue(name);
                     setQueryConfidence("exact");
                     setQuery(name);
+                    setOpenSource(resolveSource(name, "starter"));
                   }}
                 />
               </motion.div>
@@ -399,8 +491,16 @@ const App = () => {
             }}
             transition={focusTransition}
           >
-            <SearchBar value={inputValue} onChange={setInputValue} onSubmit={handleSubmit} />
+            <SearchBar
+              ref={searchInputRef}
+              value={inputValue}
+              onChange={setInputValue}
+              onSubmit={handleSubmit}
+            />
           </motion.div>
+          {!hasQuery && !showCard && !activeStarter && (
+            <p className="text-xs text-slate-400">Search for a Pokémon or pick a starter.</p>
+          )}
 
           {history.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -412,6 +512,7 @@ const App = () => {
                     setInputValue(name);
                     setQueryConfidence("exact");
                     setQuery(name);
+                    setOpenSource(resolveSource(name, "search"));
                   }}
                   className="rounded-full border border-white/70 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-slate-400 shadow-soft transition hover:text-slate-600"
                 >
@@ -449,6 +550,7 @@ const App = () => {
                 motionTuning={motionTuning}
                 comparisonInsight={comparisonInsight}
                 comparisonTrends={statTrends}
+                isLoading={isLoading}
                 onFlipChange={(next) => {
                   if (pokemon) {
                     setCardState(pokemon.name, { isFlipped: next });
@@ -460,14 +562,16 @@ const App = () => {
                 spotlight={spotlightActive}
                 isCollected={Boolean(collection[pokemon.name])}
                 onCollect={handleCollect}
+                openSource={openSource}
               />
             </motion.div>
           ) : null}
 
           {showEmptyState && <ErrorNotice message="No Pokémon data available." />}
         </div>
-      </motion.div>
-    </LayoutGroup>
+        </motion.div>
+      </LayoutGroup>
+    </MotionConfig>
   );
 };
 

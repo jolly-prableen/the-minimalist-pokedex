@@ -4,11 +4,13 @@ type UIState = {
   isShiny: boolean;
   accent: string;
   accentSoft: string;
+  prefersReducedMotion: boolean | null;
   cardState: Record<string, { isShiny: boolean; isFlipped: boolean; hasUsedShiny: boolean }>;
   favorites: Record<string, true>;
   collection: Record<string, { primaryType: string }>;
   history: string[];
   setShiny: (value: boolean) => void;
+  setPrefersReducedMotion: (value: boolean) => void;
   setAccent: (accent: string, accentSoft: string) => void;
   setCardState: (name: string, next: Partial<{ isShiny: boolean; isFlipped: boolean; hasUsedShiny: boolean }>) => void;
   toggleFavorite: (name: string) => void;
@@ -23,6 +25,32 @@ const COLLECTION_VERSION_KEY = "minimalist-pokedex:collection:version";
 const COLLECTION_VERSION = 3;
 const HISTORY_KEY = "minimalist-pokedex:history";
 const HISTORY_LIMIT = 8;
+const UI_PREFS_KEY = "minimalist-pokedex:ui-preferences";
+
+type StoredUIPreferences = {
+  isShiny?: boolean;
+  prefersReducedMotion?: boolean;
+};
+
+const loadUIPreferences = (): StoredUIPreferences => {
+  try {
+    const raw = localStorage.getItem(UI_PREFS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") return parsed as StoredUIPreferences;
+    return {};
+  } catch {
+    return {};
+  }
+};
+
+const saveUIPreferences = (next: StoredUIPreferences) => {
+  try {
+    localStorage.setItem(UI_PREFS_KEY, JSON.stringify(next));
+  } catch {
+    // ignore write errors (private mode, etc.)
+  }
+};
 
 const loadFavorites = (): Record<string, true> => {
   try {
@@ -99,15 +127,33 @@ const saveHistory = (history: string[]) => {
   }
 };
 
+const uiPrefs = loadUIPreferences();
+
 export const useUIStore = create<UIState>((set) => ({
-  isShiny: false,
+  isShiny: uiPrefs.isShiny ?? false,
   accent: "#9aa4b2",
   accentSoft: "rgba(154, 164, 178, 0.18)",
+  prefersReducedMotion: uiPrefs.prefersReducedMotion ?? null,
   cardState: {},
   favorites: loadFavorites(),
   collection: loadCollection(),
   history: loadHistory(),
-  setShiny: (value) => set({ isShiny: value }),
+  setShiny: (value) =>
+    set((state) => {
+      saveUIPreferences({
+        isShiny: value,
+        prefersReducedMotion: state.prefersReducedMotion ?? undefined,
+      });
+      return { ...state, isShiny: value };
+    }),
+  setPrefersReducedMotion: (value) =>
+    set((state) => {
+      saveUIPreferences({
+        isShiny: state.isShiny,
+        prefersReducedMotion: value,
+      });
+      return { ...state, prefersReducedMotion: value };
+    }),
   setAccent: (accent, accentSoft) => set({ accent, accentSoft }),
   setCardState: (name, next) =>
     set((state) => ({
