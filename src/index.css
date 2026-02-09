@@ -72,6 +72,11 @@ body {
   z-index: 0;
 }
 
+.placeholder-fade::placeholder {
+  opacity: var(--placeholder-opacity, 1);
+  transition: opacity 0.35s ease;
+}
+
 .starter-orbit {
   position: relative;
   display: flex;

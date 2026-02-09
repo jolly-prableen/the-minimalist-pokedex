@@ -23,6 +23,7 @@ import { getMotionTuning } from "./utils/motion";
 import { StarterOrbit } from "./components/StarterOrbit.tsx";
 
 const normalizeQuery = (value: string) => value.trim().toLowerCase();
+const ONBOARDING_HINT_KEY = "minimalist-pokedex:onboarding-hint";
 
 const App = () => {
   const [inputValue, setInputValue] = useState("");
@@ -33,6 +34,8 @@ const App = () => {
   const [collectionOpen, setCollectionOpen] = useState(false);
   const [bagPulse, setBagPulse] = useState(0);
   const [isCollecting, setIsCollecting] = useState(false);
+  const [previewType, setPreviewType] = useState<string | null>(null);
+  const [showOnboardingHint, setShowOnboardingHint] = useState(false);
   const [openSource, setOpenSource] = useState<
     "search" | "starter" | "collection" | "favorites" | null
   >(null);
@@ -168,6 +171,19 @@ const App = () => {
       setOpenSource(null);
     }
   }, [query]);
+
+  useEffect(() => {
+    const hasSeen = sessionStorage.getItem(ONBOARDING_HINT_KEY);
+    if (!hasSeen) {
+      setShowOnboardingHint(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!pokemonQuery.isSuccess || !pokemon) return;
+    sessionStorage.setItem(ONBOARDING_HINT_KEY, "1");
+    setShowOnboardingHint(false);
+  }, [pokemonQuery.isSuccess, pokemon]);
   const cardFlightRef = useRef<HTMLDivElement | null>(null);
   const bagButtonRef = useRef<HTMLButtonElement | null>(null);
   const cardControls = useAnimation();
@@ -281,6 +297,9 @@ const App = () => {
   };
 
   const showStarterOrbit = (!hasQuery || Boolean(activeStarter)) && !orbitHidden;
+  const showStarterHint = showStarterOrbit && !hasQuery;
+  const previewTheme = previewType ? getThemeForType(previewType) : null;
+  const showHomeOnboarding = showOnboardingHint && !hasQuery && !showCard && !activeStarter;
 
   return (
     <MotionConfig reducedMotion={effectiveReducedMotion ? "always" : "never"}>
@@ -290,6 +309,14 @@ const App = () => {
           spotlightActive ? "focus-mode" : ""
         }`}
       >
+        <div
+          className="pointer-events-none absolute inset-0 transition-opacity duration-500 ease-out"
+          style={{
+            background: previewTheme?.soft ?? "transparent",
+            opacity: previewTheme ? 1 : 0,
+          }}
+          aria-hidden
+        />
         <motion.div
           animate={{ opacity: spotlightActive ? 0.7 : 0.85 }}
           transition={focusTransition}
@@ -314,13 +341,13 @@ const App = () => {
             transition={focusTransition}
           >
             <div className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--accent)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
                 The Minimalist Pokédex
               </p>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
                 Premium Pokémon Search
               </h1>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-400">
                 Apple-inspired clarity with fluid, data-driven interactions.
               </p>
             </div>
@@ -464,6 +491,7 @@ const App = () => {
             {showStarterOrbit && (
               <motion.div
                 key="starter-orbit"
+                className="relative"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
@@ -471,7 +499,9 @@ const App = () => {
               >
                 <StarterOrbit
                   activeName={activeStarter}
+                  onHoverType={(type) => setPreviewType(type)}
                   onSelect={(name: string) => {
+                    setPreviewType(null);
                     setActiveStarter(name);
                     setInputValue(name);
                     setQueryConfidence("exact");
@@ -479,6 +509,20 @@ const App = () => {
                     setOpenSource(resolveSource(name, "starter"));
                   }}
                 />
+                {showStarterHint && (
+                  <motion.p
+                    className="pointer-events-none absolute left-1/2 top-full mt-3 -translate-x-1/2 text-[0.7rem] font-medium tracking-[0.2em] text-slate-400"
+                    initial={effectiveReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={
+                      effectiveReducedMotion
+                        ? { duration: 0 }
+                        : { duration: 0.6, ease: "easeOut" }
+                    }
+                  >
+                    Pick a starter or search to begin
+                  </motion.p>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -498,6 +542,23 @@ const App = () => {
               onSubmit={handleSubmit}
             />
           </motion.div>
+          <AnimatePresence>
+            {showHomeOnboarding && (
+              <motion.p
+                className="mt-3 text-[0.65rem] font-medium tracking-[0.2em] text-slate-400"
+                initial={effectiveReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                transition={
+                  effectiveReducedMotion
+                    ? { duration: 0 }
+                    : { duration: 0.45 * motionTuning.fadeMultiplier, ease: motionTuning.ease }
+                }
+              >
+                Collect Pokémon as cards →
+              </motion.p>
+            )}
+          </AnimatePresence>
           {!hasQuery && !showCard && !activeStarter && (
             <p className="text-xs text-slate-400">Search for a Pokémon or pick a starter.</p>
           )}
@@ -567,7 +628,20 @@ const App = () => {
             </motion.div>
           ) : null}
 
-          {showEmptyState && <ErrorNotice message="No Pokémon data available." />}
+          {showEmptyState && (
+            <motion.p
+              className="rounded-2xl border border-white/70 bg-white/80 p-4 text-sm text-slate-500 shadow-soft"
+              initial={effectiveReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={
+                effectiveReducedMotion
+                  ? { duration: 0 }
+                  : { duration: 0.35 * motionTuning.fadeMultiplier, ease: motionTuning.ease }
+              }
+            >
+              We couldn’t find that Pokémon. Try another name or check the spelling.
+            </motion.p>
+          )}
         </div>
         </motion.div>
       </LayoutGroup>
